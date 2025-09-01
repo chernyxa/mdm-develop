@@ -1,0 +1,120 @@
+server:
+  port: ${MDM_PORT:9095}
+  servlet:
+    context-path: /${spring.application.name}
+
+spring:
+  application:
+    name: mdm
+  datasource:
+    url: jdbc:postgresql://localhost:5436/mdm
+    username: dev
+    password: Ab123456
+    hikari:
+      schema: mdm
+      connection-init-sql: CREATE SCHEMA IF NOT EXISTS ${spring.datasource.hikari.schema};
+  liquibase:
+    change-log: ./db/changelog/changelog-master.yml
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  kafka:
+    bootstrap-servers: 195.93.252.91:29092
+    producer:
+      acks: all
+    consumer:
+      group-id: danya
+  cloud:
+    openfeign:
+      client:
+        config:
+          service-one-client:
+            connect-timeout: 3000
+            read-timeout: 3000
+          service-two-client:
+            connect-timeout: 3000
+            read-timeout: 3000
+
+logging:
+  console:
+    enabled: true
+  file:
+    enabled: false
+    path: /var/logs
+    name: ${spring.application.name}
+  logstash:
+    enabled: false
+
+
+mdm:
+  kafka:
+    send-mdm-in:
+      enabled: true
+      topic: MDM.Change.Phone.IN.V1
+  integration:
+    service1-host: 195.93.252.91:8020
+    service2-host: 195.93.252.91:8020
+  processing-pool:
+    service-one:
+      threads: 10
+      queue-depth: 1000
+    service-two:
+      threads: 10
+      queue-depth: 1000
+      size: 100
+  scheduler:
+    retrySendMessagesJob:
+      retry-interval: "0 0/5 * * * *"
+      lookback-hours: 24
+      lag-minutes: 15
+      page-size: 100
+    deleteOldMessagesJob:
+      delete-interval: "0 0 0 * * *"
+      threshold-weeks: 8
+  metrics:
+    undelivered-events:
+      name: mdm.undelivered.events
+      ttlMillis: 60000
+
+resilience4j:
+  rateLimiter:
+    instances:
+      service1-client:
+        timeoutDuration: 30s
+        limit-refresh-period: 1m
+        limit-for-period: 2
+      service2-client:
+        timeoutDuration: 30s
+        limit-refresh-period: 1m
+        limit-for-period: 2
+
+  circuitbreaker:
+    instances:
+      service1-client:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 100
+        minimum-number-of-calls: 10
+        failureRateThreshold: 50
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 2s
+        waitDurationInOpenState: 1m
+        permittedNumberOfCallsInHalfOpenState: 10
+
+      service2-client:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 100
+        minimum-number-of-calls: 10
+        failureRateThreshold: 50
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 2s
+        waitDurationInOpenState: 1m
+        permittedNumberOfCallsInHalfOpenState: 10
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: info, health, prometheus
+
