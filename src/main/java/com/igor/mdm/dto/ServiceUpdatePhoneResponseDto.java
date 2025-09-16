@@ -1,6 +1,6 @@
 package com.igor.mdm.dto;
 
-import com.danya.mdm.enums.ResponseStatus;
+import com.igor.mdm.enums.ResponseStatus;
 import lombok.Builder;
 
 import java.util.UUID;
