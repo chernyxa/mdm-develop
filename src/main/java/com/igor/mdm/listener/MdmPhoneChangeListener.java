@@ -1,0 +1,50 @@
+package com.igor.mdm.listener;
+
+import com.igor.mdm.dto.ChangePhoneDto;
+import com.igor.mdm.exception.MdmException;
+import com.igor.mdm.service.MessageProcessingService;
+import com.igor.mdm.service.ValidationService;
+import com.igor.mdm.util.JsonUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.MDC;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "mdm.kafka.send-mdm-in", name = "enabled", havingValue = "true")
+public class MdmPhoneChangeListener {
+
+    private final JsonUtil jsonUtil;
+    private final MessageProcessingService messageProcessingService;
+    private final ValidationService validationService;
+
+    @KafkaListener(topics = "${mdm.kafka.send-mdm-in.topic}", groupId = "${spring.kafka.consumer.group-id}")
+    public void receiveResponse(ConsumerRecord<String, String> consumerRecord) {
+        MDC.put("kafkaTopic", consumerRecord.topic());
+        MDC.put("kafkaPartition", String.valueOf(consumerRecord.partition()));
+        MDC.put("kafkaOffset", String.valueOf(consumerRecord.offset()));
+        if (consumerRecord.key() != null) {
+            MDC.put("kafkaKey", consumerRecord.key());
+        }
+
+        try {
+            log.info("Получено сообщение из топика {}: {}", consumerRecord.topic(), consumerRecord.value());
+
+            ChangePhoneDto dto = jsonUtil.fromJson(consumerRecord.value(), ChangePhoneDto.class);
+
+            validationService.validate(dto);
+            messageProcessingService.process(dto);
+        } catch (MdmException e) {
+            log.warn("Произошла ошибка при обработке сообщения: {}", e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Произошла ошибка при обработке сообщения: {}", e.getMessage(), e);
+        } finally {
+            MDC.clear();
+        }
+    }
+}
